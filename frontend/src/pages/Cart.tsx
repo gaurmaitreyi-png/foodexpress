@@ -1,0 +1,70 @@
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Minus, Plus } from "lucide-react";
+import toast from "react-hot-toast";
+import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import api from "../api/client";
+
+export default function Cart() {
+  const { lines, restaurantId, add, remove, clear, total } = useCart();
+  const { isAuthed } = useAuth();
+  const [address, setAddress] = useState("");
+  const [placing, setPlacing] = useState(false);
+  const nav = useNavigate();
+
+  async function placeOrder() {
+    if (!isAuthed) { toast.error("Please sign in to order"); nav("/login"); return; }
+    if (!address.trim()) { toast.error("Add a delivery address"); return; }
+    setPlacing(true);
+    try {
+      await api.post("/orders/", {
+        restaurant: restaurantId,
+        delivery_address: address,
+        items: lines.map((l) => ({ menu_item: l.item.id, quantity: l.quantity })),
+      });
+      toast.success("Order placed!");
+      clear();
+      nav("/orders");
+    } catch {
+      toast.error("Could not place order");
+    } finally {
+      setPlacing(false);
+    }
+  }
+
+  if (lines.length === 0)
+    return (
+      <div className="empty">
+        <h2>Your cart is empty</h2>
+        <p>Find something delicious to get started.</p>
+      </div>
+    );
+
+  return (
+    <main className="container" style={{ maxWidth: 640, marginTop: 40 }}>
+      <h1 style={{ fontSize: "2rem", marginBottom: 20 }}>Your order</h1>
+      <div className="panel">
+        {lines.map((l) => (
+          <div className="cart-line" key={l.item.id}>
+            <div>
+              <strong>{l.item.name}</strong>
+              <div style={{ color: "var(--ink-soft)", fontSize: "0.9rem" }}>₹{l.item.price} each</div>
+            </div>
+            <div className="qty">
+              <button onClick={() => remove(l.item.id)}><Minus size={14} /></button>
+              <span>{l.quantity}</span>
+              <button onClick={() => add(l.item)}><Plus size={14} /></button>
+            </div>
+          </div>
+        ))}
+        <div className="cart-total"><span>Total</span><span>₹{total.toFixed(2)}</span></div>
+        <label htmlFor="addr">Delivery address</label>
+        <textarea id="addr" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Flat, street, area, city" />
+        <button className="btn block dark" style={{ marginTop: 16 }} onClick={placeOrder} disabled={placing}>
+          {placing ? "Placing…" : `Place order · ₹${total.toFixed(2)}`}
+        </button>
+      </div>
+    </main>
+  );
+}
