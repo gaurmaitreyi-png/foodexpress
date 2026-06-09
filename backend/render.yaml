@@ -2,7 +2,9 @@ services:
   - type: web
     name: foodexpress-api
     runtime: python
-    buildCommand: "./build.sh"
+    plan: free
+    rootDir: backend
+    buildCommand: "bash build.sh"
     startCommand: "gunicorn config.wsgi:application"
     envVars:
       - key: SECRET_KEY
