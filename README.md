@@ -2,8 +2,8 @@
 
 A full-stack food delivery web app. Browse restaurants, build an order, place it, track it. Built to learn the full pipeline end to end — Django schema design and object lifecycle on the backend, a typed React SPA on the frontend, and a real deployment across Render and Vercel.
 
-**Live demo:** _add your Vercel link here_
-**API:** _add your Render link here_
+**Live demo:** https://project-u640j.vercel.app
+**API:** https://foodexpress-api-6cuf.onrender.com
 
 ![Home page](docs/screenshots/home.png)
 
