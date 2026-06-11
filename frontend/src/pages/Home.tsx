@@ -5,6 +5,7 @@ import { Clock, Search } from "lucide-react";
 import api from "../api/client";
 import { Restaurant } from "../types";
 import StarRating from "../components/StarRating";
+import RestaurantSkeleton from "../components/RestaurantSkeleton";
 
 export default function Home() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -52,11 +53,13 @@ export default function Home() {
 
         <div className="section-head">
           <h2>Restaurants near you</h2>
-          <span>{filtered.length} {filtered.length === 1 ? "result" : "results"}</span>
+          <span>{loading ? "" : `${filtered.length} ${filtered.length === 1 ? "result" : "results"}`}</span>
         </div>
 
         {loading ? (
-          <div className="center-load">Loading the kitchens…</div>
+          <div className="grid">
+            {Array.from({ length: 6 }).map((_, i) => <RestaurantSkeleton key={i} />)}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty">
             <h2>{query ? "No matches" : "Nothing here yet"}</h2>
