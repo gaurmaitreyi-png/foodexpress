@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Star, Clock, Plus } from "lucide-react";
+import { Clock, Plus, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../api/client";
 import { Restaurant, MenuItem } from "../types";
 import { useCart } from "../context/CartContext";
+import StarRating from "../components/StarRating";
 
 export default function RestaurantDetail() {
   const { id } = useParams();
+  const nav = useNavigate();
   const [r, setR] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const { add } = useCart();
@@ -36,11 +38,14 @@ export default function RestaurantDetail() {
 
   return (
     <main className="container">
+      <button className="back-btn" onClick={() => nav("/")}>
+        <ArrowLeft size={16} /> All restaurants
+      </button>
       <img className="detail-hero" src={r.image_url} alt={r.name} />
       <div className="detail-head">
         <h1>{r.name}</h1>
         <div className="card-meta">
-          <span className="rating"><Star size={15} fill="currentColor" /> {r.rating}</span>
+          <StarRating value={r.rating} size={15} />
           <span className="pill">{r.cuisine}</span>
           <span><Clock size={14} /> {r.delivery_time_mins} min</span>
         </div>
