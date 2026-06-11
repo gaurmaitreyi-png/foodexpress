@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
 import toast from "react-hot-toast";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -35,9 +35,15 @@ export default function Cart() {
 
   if (lines.length === 0)
     return (
-      <div className="empty">
+      <div className="empty-cart">
+        <div className="empty-cart-icon">
+          <ShoppingBag size={56} strokeWidth={1.5} />
+        </div>
         <h2>Your cart is empty</h2>
-        <p>Find something delicious to get started.</p>
+        <p>Find something delicious to get started — browse the kitchens near you.</p>
+        <button className="btn dark" onClick={() => nav("/")} style={{ marginTop: 20 }}>
+          Browse restaurants
+        </button>
       </div>
     );
 
