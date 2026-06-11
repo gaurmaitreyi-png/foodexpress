@@ -171,6 +171,23 @@ input:focus, textarea:focus { outline: 2px solid var(--chili); border-color: tra
   outline: 2px solid var(--chili);
   border-color: transparent;
 }
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--amber);
+}
+.stars .star-empty {
+  color: var(--line);
+}
+.stars-num {
+  margin-left: 6px;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
 
 @media (max-width: 600px) {
   .hero { padding: 48px 0 24px; }
