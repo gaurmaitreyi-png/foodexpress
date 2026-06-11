@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Star, Clock, Search } from "lucide-react";
+import { Clock, Search } from "lucide-react";
 import api from "../api/client";
 import { Restaurant } from "../types";
+import StarRating from "../components/StarRating";
 
 export default function Home() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -77,7 +78,7 @@ export default function Home() {
                 <div className="card-body">
                   <h3>{r.name}</h3>
                   <div className="card-meta">
-                    <span className="rating"><Star size={14} fill="currentColor" /> {r.rating}</span>
+                    <StarRating value={r.rating} />
                     <span className="pill">{r.cuisine}</span>
                     <span><Clock size={13} /> {r.delivery_time_mins} min</span>
                   </div>
