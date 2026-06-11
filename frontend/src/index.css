@@ -248,6 +248,67 @@ input:focus, textarea:focus { outline: 2px solid var(--chili); border-color: tra
   width: 60px;
   border-radius: 999px;
 }
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.progress-track {
+  display: flex;
+  align-items: flex-start;
+  margin: 14px 0 4px;
+  position: relative;
+}
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  font-size: 0.72rem;
+}
+.stage-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+  z-index: 2;
+  border: 2px solid var(--paper-2);
+  transition: all 0.2s;
+}
+.stage.done .stage-dot {
+  background: var(--veg);
+  color: #fff;
+  border-color: var(--veg);
+}
+.stage.active .stage-dot {
+  box-shadow: 0 0 0 4px rgba(47, 125, 62, 0.15);
+}
+.stage-label {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  text-align: center;
+  font-weight: 500;
+}
+.stage.done .stage-label {
+  color: var(--ink);
+}
+.stage-line {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: var(--line);
+  z-index: 1;
+}
+.stage.done + .stage .stage-line,
+.stage.done .stage-line {
+  background: var(--veg);
+}
 
 @media (max-width: 600px) {
   .hero { padding: 48px 0 24px; }
