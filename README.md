@@ -1,131 +1,89 @@
-# FoodExpress 🍜
+# FoodExpress
 
-A full-stack food delivery web app. Browse restaurants, build an order, place it, track it. Built to learn the full pipeline end to end — Django schema design and object lifecycle on the backend, a typed React SPA on the frontend, and a real deployment across Render and Vercel.
+A food delivery web app I built as a full-stack exercise. You can browse restaurants, build an order, and place it. The point of the project was to go through the whole pipeline once myself: Django models and the request/response cycle on the backend, a typed React SPA on the frontend, and an actual deployment instead of just running it locally.
 
-**Live demo:** _add your Vercel link here_
-**API:** _add your Render link here_
+Live site: https://project-u640j.vercel.app
+
+Backend API: https://foodexpress-api-6cuf.onrender.com
+
+## Stack
+
+Backend is Django 6 with Django REST Framework and SimpleJWT for tokens. Database is PostgreSQL on Render (SQLite when running locally). Frontend is React 18 with TypeScript, built with Vite. Framer Motion for the page transitions, react-hot-toast for the small notifications, lucide-react for icons. Backend is hosted on Render and the frontend on Vercel.
+
+## Why PostgreSQL instead of MongoDB
+
+The original spec said MongoDB but I switched after starting. Django's ORM is built around relational tables, and the libraries that bridge it to MongoDB (`djongo`, `mongoengine`) don't keep up with new Django releases. A food delivery schema is also naturally relational, so I wasn't really gaining anything by forcing Mongo in there. Render's free Postgres covered it.
+
+## Models
+
+Five models, with a custom user. I set up `AbstractUser` at the start because adding a custom user model later in a Django project is genuinely painful.
+
+- `User`: has the usual auth fields plus a phone and address, and an `is_restaurant_owner` flag in case I add an owner dashboard later.
+- `Restaurant`: belongs to a user, with cuisine, rating, delivery time.
+- `MenuItem`: belongs to a restaurant.
+- `Order`: belongs to a customer and a restaurant. Has a status field with six states (PENDING, CONFIRMED, PREPARING, OUT_FOR_DELIVERY, DELIVERED, CANCELLED).
+- `OrderItem`: line item on an order. The important detail here is that it stores `unit_price` directly instead of always reading it from the menu item. That way if the restaurant changes their prices tomorrow, my order from yesterday still shows what I actually paid.
 
 ![Home page](docs/screenshots/home.png)
 
----
+The two model methods worth pointing out:
 
-## What's inside
+`OrderItem.save()` overrides the default save to capture the menu price the first time the item is saved, so the snapshot above happens automatically.
 
-| Layer | Stack |
-|-------|-------|
-| Backend | Django 6 + Django REST Framework, JWT auth (SimpleJWT) |
-| Database | PostgreSQL (SQLite for local dev) |
-| Frontend | React 18 + TypeScript + Vite |
-| UI / motion | Framer Motion, react-hot-toast, lucide-react icons |
-| Hosting | Backend on Render, frontend on Vercel |
+`Order.recalculate_total()` sums up the line items and writes the total back with `update_fields=["total_price", "updated_at"]`. Using `update_fields` means only those two columns are touched in the SQL, which matters when other code might be writing to the same row.
 
----
+The `on_delete` choices were deliberate. Restaurants and menu items use `CASCADE` on their parents, which is fine because if you delete a restaurant you don't want orphaned menu rows. But `Order.restaurant` uses `PROTECT` instead. If someone deletes a restaurant out from under an order that's still being delivered, that's a real problem, so the database refuses the delete.
 
-## Why these choices
+## API
 
-I started down the MongoDB path because the brief named it, but Django's ORM is built for relational databases and a food-delivery domain is relational by nature — users own restaurants, restaurants have menu items, orders have line items. Forcing it through `djongo` would have fought the very thing the task asks you to learn (schemas and object lifecycle). PostgreSQL on Render's free tier was the faster, cleaner path and let the ORM do its job.
+| Method | Path | Auth | What it does |
+|--------|------|------|--------------|
+| POST | /api/auth/register/ | no | create a user |
+| POST | /api/auth/login/ | no | returns JWT access + refresh |
+| POST | /api/auth/refresh/ | no | refresh the access token |
+| GET | /api/restaurants/ | no | list restaurants |
+| GET | /api/restaurants/{id}/ | no | restaurant with nested menu items |
+| GET | /api/orders/ | yes | orders for the logged-in user only |
+| POST | /api/orders/ | yes | place an order |
+| POST | /api/orders/{id}/cancel/ | yes | cancel a non-delivered order |
 
----
+The frontend routes correspond directly. The home page hits the list endpoint, `/restaurant/:id` hits the detail endpoint, the cart page POSTs to orders, and so on.
 
-## The data model
+![Menu page](docs/screenshots/menu.png)
 
-Five models, each earning its place:
+## Running it locally
 
-- **User** — a custom user model (subclassing `AbstractUser`). Set this up at project start; swapping it in later is painful.
-- **Restaurant** — owned by a user, has a cuisine, rating, delivery time.
-- **MenuItem** — belongs to a restaurant, has price and category.
-- **Order** — placed by a customer against a restaurant, moves through a status lifecycle (`PENDING → CONFIRMED → PREPARING → OUT_FOR_DELIVERY → DELIVERED`, or `CANCELLED`).
-- **OrderItem** — a line item. It *snapshots* the menu price at order time (`unit_price`), so later price changes never rewrite order history.
+Backend, from the `backend` folder:
 
-![Schema diagram](docs/screenshots/schema.png)
-
-### Object lifecycle — the part worth understanding
-
-Two deliberate lifecycle hooks:
-
-1. **`OrderItem.save()`** sets `unit_price` from the linked menu item *if it isn't already set* — capturing the price at the moment of ordering.
-2. **`Order.recalculate_total()`** sums its line items and saves only the changed fields (`update_fields=[...]`). The serializer calls this right after creating an order and its items, so the total is always derived, never trusted from the client.
-
-This is the "object lifecycle" idea in practice: a model isn't just a row — it has behavior at create/save/update time, and `on_delete` rules (`CASCADE` vs `PROTECT`) decide what survives when related objects disappear. Orders use `PROTECT` on the restaurant so you can't delete a restaurant out from under a live order.
-
----
-
-## API endpoints
-
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| POST | `/api/auth/register/` | – | Create account |
-| POST | `/api/auth/login/` | – | Get JWT (`access`, `refresh`) |
-| POST | `/api/auth/refresh/` | – | Refresh access token |
-| GET | `/api/restaurants/` | – | List restaurants |
-| GET | `/api/restaurants/{id}/` | – | Restaurant + nested menu |
-| GET | `/api/orders/` | ✓ | Current user's orders |
-| POST | `/api/orders/` | ✓ | Place an order |
-| POST | `/api/orders/{id}/cancel/` | ✓ | Cancel an order |
-
-The frontend routes map onto these one-to-one — `/` calls the restaurant list, `/restaurant/:id` calls the detail endpoint, `/cart` posts an order, and so on.
-
----
-
-## Run it locally
-
-### Backend
-
-```bash
-cd backend
+```
 python -m venv venv
-venv\Scripts\activate        # Windows
+venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
-python seed.py               # loads 3 demo restaurants
+python seed.py
 python manage.py runserver
 ```
 
-API is now at `http://localhost:8000`.
+Frontend, from `frontend`:
 
-### Frontend
-
-```bash
-cd frontend
+```
 npm install
 npm run dev
 ```
 
-App is now at `http://localhost:5173`. The `.env` file points `VITE_API_URL` at your local backend.
-
-![Restaurant menu](docs/screenshots/menu.png)
-
----
+Frontend dev server is on `http://localhost:5173` and reads `VITE_API_URL` from `.env`, which defaults to the local Django at port 8000.
 
 ## Deployment
 
-### Backend → Render
+Backend on Render. The `render.yaml` in the backend folder provisions both the web service and a free Postgres database in one go, so it's a Blueprint deploy rather than a manual one. I had to set `rootDir: backend` in the YAML so Render runs the build script from inside that folder, and I added `python seed.py || true` at the end of `build.sh` so the demo restaurants get loaded on each deploy without needing shell access (the Render free tier doesn't open the shell unless you put a card on file).
 
-1. Push this repo to GitHub.
-2. On Render: **New → Blueprint**, point it at the repo. `render.yaml` provisions the web service *and* a free Postgres database automatically.
-3. After the first deploy, set `CORS_ALLOWED_ORIGINS` to your Vercel URL.
+Frontend on Vercel. Imported the repo, set the root directory to `frontend`, and added `VITE_API_URL` pointing at the Render URL plus `/api`. The `vercel.json` does the SPA rewrite so refreshing on `/restaurant/3` doesn't 404.
 
-![Render deploy](docs/screenshots/render.png)
+The thing that bit me: after both were live, the frontend still couldn't talk to the backend. The browser was blocking the requests because CORS on Django was only allowing `localhost:5173`. Updated `CORS_ALLOWED_ORIGINS` on Render to the Vercel URL and it worked.
 
-### Frontend → Vercel
+## Notes on the code
 
-1. On Vercel: **New Project**, import the repo, set the root directory to `frontend`.
-2. Add an environment variable: `VITE_API_URL = https://your-app.onrender.com/api`
-3. Deploy. `vercel.json` handles SPA routing so refreshing a deep link doesn't 404.
-
-![Vercel deploy](docs/screenshots/vercel.png)
-
----
-
-## What I'd add next
-
-- Restaurant-owner dashboard (the `is_restaurant_owner` flag is already there)
-- Real payment flow
-- Order status updates over websockets
-- Search and cuisine filtering
-
----
-
-## Notes
-
-The demo seed data uses Unsplash images. Auth tokens live in `localStorage` — fine for a demo, but a production build would move to httpOnly cookies.
+- Auth tokens go into `localStorage`. Fine for a demo. If this were going past demo, I'd move to httpOnly cookies because localStorage is reachable from any script on the page.
+- Cart only holds items from one restaurant at a time. Adding from a second restaurant clears the first cart, which is what most delivery apps do.
+- Seed images come from Unsplash.
+- I left `tests.py` empty. The end-to-end check I ran before deploying was a script that registered, logged in, ordered, and cancelled against the local server. If I were extending this, that goes into a proper test file with `pytest-django`.

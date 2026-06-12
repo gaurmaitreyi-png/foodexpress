@@ -143,6 +143,190 @@ input:focus, textarea:focus { outline: 2px solid var(--chili); border-color: tra
 .empty h2 { font-size: 1.6rem; color: var(--ink); margin-bottom: 8px; }
 .center-load { text-align: center; padding: 80px; color: var(--ink-soft); }
 .footer { border-top: 1px solid var(--line); margin-top: 80px; padding: 32px 0; color: var(--ink-soft); font-size: 0.85rem; text-align: center; }
+/* Paste these new rules at the end of frontend/src/index.css, just before the @media queries */
+
+.search-wrap {
+  position: relative;
+  margin: 24px 0 0;
+  max-width: 480px;
+}
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  padding: 12px 14px 12px 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: #fff;
+}
+.search-input:focus {
+  outline: 2px solid var(--chili);
+  border-color: transparent;
+}
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--amber);
+}
+.stars .star-empty {
+  color: var(--line);
+}
+.stars-num {
+  margin-left: 6px;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.empty-cart {
+  max-width: 440px;
+  margin: 80px auto;
+  text-align: center;
+  padding: 0 24px;
+}
+.empty-cart-icon {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--chili);
+}
+.empty-cart h2 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+.empty-cart p {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skel {
+  background: linear-gradient(90deg, var(--paper-2) 25%, #ece5d4 50%, var(--paper-2) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+.skeleton-card { cursor: default; }
+.skel-img {
+  aspect-ratio: 16/10;
+  width: 100%;
+  border-radius: 0;
+}
+.skel-title {
+  height: 22px;
+  width: 65%;
+  margin-bottom: 14px;
+}
+.skel-meta {
+  display: flex;
+  gap: 10px;
+}
+.skel-pill {
+  height: 14px;
+  width: 60px;
+  border-radius: 999px;
+}
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.progress-track {
+  display: flex;
+  align-items: flex-start;
+  margin: 14px 0 4px;
+  position: relative;
+}
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  font-size: 0.72rem;
+}
+.stage-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+  z-index: 2;
+  border: 2px solid var(--paper-2);
+  transition: all 0.2s;
+}
+.stage.done .stage-dot {
+  background: var(--veg);
+  color: #fff;
+  border-color: var(--veg);
+}
+.stage.active .stage-dot {
+  box-shadow: 0 0 0 4px rgba(47, 125, 62, 0.15);
+}
+.stage-label {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  text-align: center;
+  font-weight: 500;
+}
+.stage.done .stage-label {
+  color: var(--ink);
+}
+.stage-line {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: var(--line);
+  z-index: 1;
+}
+.stage.done + .stage .stage-line,
+.stage.done .stage-line {
+  background: var(--veg);
+}
+/* Add to end of frontend/src/index.css, just above the @media (max-width: 600px) block */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin: 24px 0 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.back-btn:hover {
+  color: var(--chili);
+}
 
 @media (max-width: 600px) {
   .hero { padding: 48px 0 24px; }

@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Star, Clock } from "lucide-react";
+import { Clock, Search } from "lucide-react";
 import api from "../api/client";
 import { Restaurant } from "../types";
+import StarRating from "../components/StarRating";
+import RestaurantSkeleton from "../components/RestaurantSkeleton";
 
 export default function Home() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
   const nav = useNavigate();
 
   useEffect(() => {
@@ -16,6 +19,14 @@ export default function Home() {
       .catch(() => setRestaurants([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return restaurants;
+    const q = query.toLowerCase();
+    return restaurants.filter(
+      (r) => r.name.toLowerCase().includes(q) || r.cuisine.toLowerCase().includes(q)
+    );
+  }, [query, restaurants]);
 
   return (
     <>
@@ -30,21 +41,33 @@ export default function Home() {
       </header>
 
       <main className="container">
+        <div className="search-wrap">
+          <Search size={18} className="search-icon" />
+          <input
+            className="search-input"
+            placeholder="Search restaurants or cuisines…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
         <div className="section-head">
           <h2>Restaurants near you</h2>
-          <span>{restaurants.length} open now</span>
+          <span>{loading ? "" : `${filtered.length} ${filtered.length === 1 ? "result" : "results"}`}</span>
         </div>
 
         {loading ? (
-          <div className="center-load">Loading the kitchens…</div>
-        ) : restaurants.length === 0 ? (
+          <div className="grid">
+            {Array.from({ length: 6 }).map((_, i) => <RestaurantSkeleton key={i} />)}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="empty">
-            <h2>Nothing here yet</h2>
-            <p>The backend returned no restaurants. Make sure the API is running and seeded.</p>
+            <h2>{query ? "No matches" : "Nothing here yet"}</h2>
+            <p>{query ? `Nothing matches "${query}". Try a different search.` : "The backend returned no restaurants. Make sure the API is running and seeded."}</p>
           </div>
         ) : (
           <div className="grid">
-            {restaurants.map((r, i) => (
+            {filtered.map((r, i) => (
               <motion.div
                 key={r.id}
                 className="card"
@@ -58,7 +81,7 @@ export default function Home() {
                 <div className="card-body">
                   <h3>{r.name}</h3>
                   <div className="card-meta">
-                    <span className="rating"><Star size={14} fill="currentColor" /> {r.rating}</span>
+                    <StarRating value={r.rating} />
                     <span className="pill">{r.cuisine}</span>
                     <span><Clock size={13} /> {r.delivery_time_mins} min</span>
                   </div>
