@@ -1,4 +1,13 @@
-"""AI menu assistant powered by a local Ollama LLM.
+"""AI menu assistant.
+
+Provider-aware so it works both locally and in the cloud:
+  * Ollama  — a local LLM (http://localhost:11434), great for dev.
+  * Gemini  — Google's hosted API, used in production where there is no local
+              Ollama (Render/Vercel can't reach your machine's localhost).
+
+Selection (CHAT_PROVIDER):
+  * "ollama" or "gemini" forces a provider.
+  * "auto" (default) picks Gemini when GEMINI_API_KEY is set, else Ollama.
 
 Kept in its own module so the LLM/HTTP plumbing stays out of the core CRUD
 views. Mirrors the project's class-based view style (see views.py) and reuses
@@ -14,10 +23,51 @@ from rest_framework.views import APIView
 from .models import MenuItem, Order
 from .serializers import MenuItemSerializer
 
-# Ollama config — overridable via env, never hardcoded for deployment.
+# Ollama (local dev) — overridable via env, never hardcoded for deployment.
 OLLAMA_URL = config("OLLAMA_URL", default="http://localhost:11434")
 OLLAMA_MODEL = config("OLLAMA_MODEL", default="qwen2.5")
-OLLAMA_TIMEOUT = config("OLLAMA_TIMEOUT", default=30, cast=int)
+
+# Gemini (hosted, for production). Reuses the same GEMINI_API_KEY the MCP
+# server already uses; same default model.
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-2.5-flash")
+
+CHAT_PROVIDER = config("CHAT_PROVIDER", default="auto").lower()
+LLM_TIMEOUT = config("LLM_TIMEOUT", default=30, cast=int)
+
+
+def _provider():
+    if CHAT_PROVIDER in ("gemini", "ollama"):
+        return CHAT_PROVIDER
+    return "gemini" if GEMINI_API_KEY else "ollama"
+
+
+def _call_ollama(prompt):
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/generate",
+        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        timeout=LLM_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return (resp.json().get("response") or "").strip()
+
+
+def _call_gemini(prompt):
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY not configured")
+    resp = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        params={"key": GEMINI_API_KEY},
+        json={"contents": [{"parts": [{"text": prompt}]}]},
+        timeout=LLM_TIMEOUT,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+def _generate(prompt):
+    return _call_gemini(prompt) if _provider() == "gemini" else _call_ollama(prompt)
 
 
 def _format_menu(items):
@@ -96,19 +146,13 @@ class ChatView(APIView):
         )
 
         try:
-            resp = requests.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=OLLAMA_TIMEOUT,
-            )
-            resp.raise_for_status()
-            answer = (resp.json().get("response") or "").strip()
+            answer = _generate(prompt)
         except requests.exceptions.RequestException:
             # Connection refused / timeout / bad status → treat as offline.
             return Response({
                 "response": "Chat service is temporarily offline. Please try again later.",
                 "success": False,
-                "error": "ollama_offline",
+                "error": "llm_offline",
             })
         except Exception as e:  # pragma: no cover - defensive catch-all
             return Response({
