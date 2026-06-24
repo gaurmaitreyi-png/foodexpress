@@ -6,6 +6,7 @@ import Cart from "./pages/Cart";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Orders from "./pages/Orders";
+import ChatBot from "./components/ChatBot";
 
 // Route table — each path maps to a backend resource:
 //   /                -> GET /restaurants/
@@ -28,6 +29,7 @@ export default function App() {
       <footer className="footer">
         <div className="container">FoodExpress — a full-stack demo. Django + DRF · React + TypeScript.</div>
       </footer>
+      <ChatBot />
     </>
   );
 }

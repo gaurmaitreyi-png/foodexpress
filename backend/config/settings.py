@@ -61,6 +61,10 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticatedOrReadOnly",),
+    # Scoped throttle applied only to the LLM chat endpoint (see api/chat.py).
+    "DEFAULT_THROTTLE_RATES": {
+        "chat": config("CHAT_THROTTLE_RATE", default="20/min"),
+    },
 }
 
 SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(hours=12)}
