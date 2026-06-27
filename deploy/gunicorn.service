@@ -1,0 +1,17 @@
+[Unit]
+Description=gunicorn daemon for FoodExpress
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/foodexpress/backend
+EnvironmentFile=/home/ubuntu/foodexpress/backend/.env
+ExecStart=/home/ubuntu/foodexpress/backend/venv/bin/gunicorn \
+          --workers 3 \
+          --bind 127.0.0.1:8000 \
+          config.wsgi:application
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
