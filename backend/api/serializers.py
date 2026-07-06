@@ -1,8 +1,19 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from .models import Restaurant, MenuItem, Order, OrderItem
 
 User = get_user_model()
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    """Adds the account type + username to the token response so the customer
+    and restaurant apps can route the user correctly after login."""
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data["username"] = self.user.username
+        data["is_restaurant_owner"] = self.user.is_restaurant_owner
+        return data
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -66,8 +77,12 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             "id", "customer", "customer_name", "restaurant", "restaurant_name",
             "status", "delivery_address", "total_price", "items", "created_at",
+            "payment_status", "razorpay_order_id",
         ]
-        read_only_fields = ["customer", "total_price", "status"]
+        read_only_fields = [
+            "customer", "total_price", "status",
+            "payment_status", "razorpay_order_id",
+        ]
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")

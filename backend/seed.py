@@ -28,14 +28,33 @@ DATA = [
               ("Tiramisu", "Classic coffee dessert", "180.00", "Dessert", True)]},
 ]
 
-Restaurant.objects.all().delete()
+# Idempotent: never deletes existing data, just ensures the demo restaurants
+# exist. Safe to run on every deploy and to "self-heal" a freshly-provisioned DB.
 owner, _ = User.objects.get_or_create(
     username="demo_owner", defaults={"is_restaurant_owner": True, "email": "owner@foodexpress.dev"})
+# Ensure the owner can log into the restaurant app (idempotent password set).
+owner.is_restaurant_owner = True
+owner.set_password("ownerpass123")
+owner.save()
+
+# A demo customer for the storefront + MCP end-to-end tests.
+customer, _ = User.objects.get_or_create(
+    username="demo_customer",
+    defaults={"email": "customer@foodexpress.dev", "address": "12 MG Road, Bengaluru"})
+customer.set_password("customerpass123")
+customer.save()
+
 for r in DATA:
     menu = r.pop("menu")
-    rest = Restaurant.objects.create(owner=owner, **r)
+    rest, created = Restaurant.objects.get_or_create(
+        name=r["name"], owner=owner, defaults=r)
     for name, desc, price, cat, veg in menu:
-        MenuItem.objects.create(restaurant=rest, name=name, description=desc,
-                                price=price, category=cat, is_vegetarian=veg)
-    print(f"Seeded {rest.name} with {len(menu)} items")
+        MenuItem.objects.get_or_create(
+            restaurant=rest, name=name,
+            defaults={"description": desc, "price": price,
+                      "category": cat, "is_vegetarian": veg})
+    print(f"{'Seeded' if created else 'Already present'}: {rest.name}")
 print("Done.")
+print("\nDemo logins:")
+print("  Restaurant owner  ->  demo_owner / ownerpass123")
+print("  Customer          ->  demo_customer / customerpass123")

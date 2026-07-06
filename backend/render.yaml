@@ -24,6 +24,16 @@ services:
         value: "gemini"
       - key: GEMINI_API_KEY
         sync: false  # set the secret value in the Render dashboard
+      # Payments — Razorpay TEST keys (set secrets in the dashboard).
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: PAYMENTS_TEST_MODE
+        value: "True"   # allows the MCP /simulate_payment/ path for demos
+      # Google Sign-In — OAuth Web Client ID (set in the dashboard).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
 
 databases:
   - name: foodexpress-db

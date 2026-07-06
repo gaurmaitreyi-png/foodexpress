@@ -6,6 +6,19 @@ Live site: https://project-u640j.vercel.app
 
 Backend API: https://foodexpress-api-6cuf.onrender.com
 
+## What's in the box
+
+The project grew from the customer storefront into a small platform that all shares **one Django backend**:
+
+- **`frontend/`** — the customer app: browse, cart, **Razorpay checkout**, **Google Sign-In**, and an AI chatbot.
+- **`frontend-restaurant/`** — a second app for restaurant owners: sign in, watch a **live order queue** (polling), and move orders through accept → preparing → out for delivery → delivered. Runs on port 5174 in dev.
+- **`backend/`** — Django + DRF. Adds Razorpay payments, a Google login endpoint, and owner-scoped order-management endpoints on top of the original API.
+- **`mcp-server/`** — MCP tools so an LLM can drive the whole thing end to end: log in, browse, order, **pay**, and track. The LLM runs via **Gemini API or a local Ollama server** (toggle with `MCP_LLM_PROVIDER`).
+
+The headline: **the MCP server can place an order and complete payment on its own** — `place_order` then `pay_for_order` (or one-shot `smart_order`). Payments run in Razorpay test mode; with no keys set it falls back to a simulated test-mode payment so headless/MCP flows still complete.
+
+**Full setup, credentials, and deploy steps are in [DEPLOY.md](DEPLOY.md).** Demo logins: customer `demo_customer / customerpass123`, owner `demo_owner / ownerpass123`.
+
 ## Stack
 
 Backend is Django 6 with Django REST Framework and SimpleJWT for tokens. Database is PostgreSQL on Render (SQLite when running locally). Frontend is React 18 with TypeScript, built with Vite. Framer Motion for the page transitions, react-hot-toast for the small notifications, lucide-react for icons. Backend is hosted on Render and the frontend on Vercel.

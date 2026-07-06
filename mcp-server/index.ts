@@ -12,14 +12,24 @@ dotenv.config();
 
 const API_BASE_URL = process.env.FOODEXPRESS_API_URL || "http://localhost:8000/api";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+// LLM provider selection. Runs the MCP server's AI tools against either a
+// hosted API (Gemini) or a local Ollama server:
+//   MCP_LLM_PROVIDER = "gemini" | "ollama" | "auto" (default)
+//   "auto" -> Gemini when GEMINI_API_KEY is set, else Ollama.
+const LLM_PROVIDER = (process.env.MCP_LLM_PROVIDER || "auto").toLowerCase();
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5";
+
 let authToken: string | null = process.env.FOODEXPRESS_AUTH_TOKEN || null;
 
 // Initialize Gemini client. The model `gemini-2.5-flash` is fast and free-tier friendly.
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-const geminiModel = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
+const geminiModel = genAI ? genAI.getGenerativeModel({ model: GEMINI_MODEL }) : null;
 
 const server = new Server(
-  { name: "foodexpress-mcp", version: "0.2.0" },
+  { name: "foodexpress-mcp", version: "0.3.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -33,20 +43,54 @@ if (authToken) {
   updateAuthHeader(authToken);
 }
 
-// Helper: ask Gemini for a JSON response, parsing safely
-async function askGeminiForJSON(prompt: string): Promise<any> {
-  if (!geminiModel) throw new Error("Gemini not configured. Set GEMINI_API_KEY in .env");
-  const result = await geminiModel.generateContent(prompt);
-  let text = result.response.text().trim();
-  // Strip code fences if present
-  text = text.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```$/, "").trim();
-  return JSON.parse(text);
+function resolveProvider(): "gemini" | "ollama" {
+  if (LLM_PROVIDER === "gemini" || LLM_PROVIDER === "ollama") return LLM_PROVIDER;
+  return GEMINI_API_KEY ? "gemini" : "ollama";
 }
 
+function stripFences(text: string): string {
+  return text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/, "")
+    .replace(/```$/, "")
+    .trim();
+}
+
+// --- Gemini (hosted API) ---
 async function askGeminiForText(prompt: string): Promise<string> {
   if (!geminiModel) throw new Error("Gemini not configured. Set GEMINI_API_KEY in .env");
   const result = await geminiModel.generateContent(prompt);
   return result.response.text().trim();
+}
+
+// --- Ollama (local server) ---
+async function askOllamaForText(prompt: string): Promise<string> {
+  const res = await axios.post(`${OLLAMA_URL}/api/generate`, {
+    model: OLLAMA_MODEL,
+    prompt,
+    stream: false,
+  });
+  return String(res.data?.response || "").trim();
+}
+
+// --- Provider-agnostic entry points used by the tools ---
+async function askLLMForText(prompt: string): Promise<string> {
+  return resolveProvider() === "ollama"
+    ? askOllamaForText(prompt)
+    : askGeminiForText(prompt);
+}
+
+async function askLLMForJSON(prompt: string): Promise<any> {
+  const text = await askLLMForText(prompt);
+  return JSON.parse(stripFences(text));
+}
+
+// Create a Razorpay order then complete it via the test-mode simulate path, so
+// the MCP flow can place AND pay for an order end-to-end without a browser.
+async function payForOrder(orderId: number): Promise<any> {
+  await api.post(`/orders/${orderId}/create_payment/`);
+  const res = await api.post(`/orders/${orderId}/simulate_payment/`);
+  return res.data;
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -115,7 +159,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["order_id"],
         },
       },
-      // === AI-powered tools (Gemini) ===
+      {
+        name: "pay_for_order",
+        description:
+          "Pay for a placed order via Razorpay (test mode). Creates the payment " +
+          "order and completes it, marking the order PAID and CONFIRMED. Use this " +
+          "after place_order to finish checkout end-to-end.",
+        inputSchema: {
+          type: "object",
+          properties: { order_id: { type: "number" } },
+          required: ["order_id"],
+        },
+      },
+      // === AI-powered tools (Gemini API or Ollama) ===
       {
         name: "recommend_dish",
         description:
@@ -200,7 +256,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           items,
         });
         return {
-          content: [{ type: "text", text: `Order placed successfully! Order ID: ${response.data.id}` }],
+          content: [{
+            type: "text",
+            text: `Order placed successfully! Order ID: ${response.data.id}, ` +
+              `total ₹${response.data.total_price} (status: ${response.data.status}, ` +
+              `payment: ${response.data.payment_status}). ` +
+              `Call pay_for_order with order_id ${response.data.id} to complete payment.`,
+          }],
+        };
+      }
+
+      case "pay_for_order": {
+        if (!authToken) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "You must login first using the login tool." }],
+          };
+        }
+        const { order_id } = args as any;
+        const paid = await payForOrder(order_id);
+        return {
+          content: [{
+            type: "text",
+            text: `Payment complete for order ${order_id}. ` +
+              `Payment status: ${paid.payment_status}, order status: ${paid.status}, ` +
+              `total ₹${paid.total_price}. Razorpay order: ${paid.razorpay_order_id}`,
+          }],
         };
       }
 
@@ -257,7 +338,7 @@ Based on the user's preferences, recommend ONE specific dish from ONE specific r
 - The restaurant's rating and delivery time
 
 Keep it under 120 words. Speak directly to the user.`;
-        const recommendation = await askGeminiForText(prompt);
+        const recommendation = await askLLMForText(prompt);
         return { content: [{ type: "text", text: recommendation }] };
       }
 
@@ -288,7 +369,7 @@ Write a warm, friendly summary (under 150 words) that includes:
 - Their most-ordered dish if there is one
 
 Speak directly to the user in a casual tone.`;
-        const summary = await askGeminiForText(prompt);
+        const summary = await askLLMForText(prompt);
         return { content: [{ type: "text", text: summary }] };
       }
 
@@ -323,16 +404,19 @@ Based on the request, pick ONE restaurant and 1-3 menu items that best match. Re
   "items": [{"menu_item": <number>, "quantity": <number>}, ...],
   "reasoning": "<one sentence explaining your choice>"
 }`;
-        const decision = await askGeminiForJSON(decisionPrompt);
+        const decision = await askLLMForJSON(decisionPrompt);
         // Actually place the order
         const orderRes = await api.post("/orders/", {
           restaurant: decision.restaurant_id,
           delivery_address,
           items: decision.items,
         });
-        const summary = `Order placed by AI! Order ID: ${orderRes.data.id}
-Total: ${orderRes.data.total_price}
-Reasoning from Gemini: ${decision.reasoning}
+        // ...then pay for it, so smart_order is a true end-to-end checkout.
+        const paid = await payForOrder(orderRes.data.id);
+        const summary = `Order placed AND paid by AI! Order ID: ${orderRes.data.id}
+Total: ₹${paid.total_price}
+Payment status: ${paid.payment_status} | Order status: ${paid.status}
+Reasoning: ${decision.reasoning}
 Items ordered: ${decision.items.length}`;
         return { content: [{ type: "text", text: summary }] };
       }
@@ -356,7 +440,10 @@ Items ordered: ${decision.items.length}`;
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("FoodExpress MCP Server v0.2 running on stdio (with Gemini AI)");
+  console.error(
+    `FoodExpress MCP Server v0.3 running on stdio ` +
+    `(LLM provider: ${resolveProvider()}, payments: Razorpay test-mode)`
+  );
 }
 
 main().catch((error) => {

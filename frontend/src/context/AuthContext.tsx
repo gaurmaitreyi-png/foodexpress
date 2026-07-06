@@ -5,6 +5,7 @@ interface AuthState {
   username: string | null;
   isAuthed: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
 }
@@ -31,6 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(u);
   }
 
+  async function loginWithGoogle(credential: string) {
+    const res = await api.post("/auth/google/", { credential });
+    localStorage.setItem("access_token", res.data.access);
+    localStorage.setItem("username", res.data.username);
+    setUsername(res.data.username);
+  }
+
   async function register(data: RegisterData) {
     await api.post("/auth/register/", data);
     await login(data.username, data.password);
@@ -44,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ username, isAuthed: !!username, login, register, logout }}
+      value={{ username, isAuthed: !!username, login, loginWithGoogle, register, logout }}
     >
       {children}
     </AuthContext.Provider>

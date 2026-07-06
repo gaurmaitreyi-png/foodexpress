@@ -5,10 +5,11 @@ import toast from "react-hot-toast";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/client";
+import { payForOrder } from "../lib/payment";
 
 export default function Cart() {
   const { lines, restaurantId, add, remove, clear, total } = useCart();
-  const { isAuthed } = useAuth();
+  const { isAuthed, username } = useAuth();
   const [address, setAddress] = useState("");
   const [placing, setPlacing] = useState(false);
   const nav = useNavigate();
@@ -18,16 +19,25 @@ export default function Cart() {
     if (!address.trim()) { toast.error("Add a delivery address"); return; }
     setPlacing(true);
     try {
-      await api.post("/orders/", {
+      // 1) Create the order (PENDING / UNPAID)
+      const { data: order } = await api.post("/orders/", {
         restaurant: restaurantId,
         delivery_address: address,
         items: lines.map((l) => ({ menu_item: l.item.id, quantity: l.quantity })),
       });
-      toast.success("Order placed!");
+      // 2) Pay for it via Razorpay (or test-mode simulate when no keys)
+      toast.loading("Opening payment…", { id: "pay" });
+      await payForOrder(order.id, { name: username ?? undefined });
+      toast.success("Payment successful — order confirmed!", { id: "pay" });
       clear();
       nav("/orders");
-    } catch {
-      toast.error("Could not place order");
+    } catch (err: any) {
+      const msg = err?.message === "Payment cancelled"
+        ? "Payment cancelled — your order is saved as unpaid."
+        : "Could not complete the order";
+      toast.error(msg, { id: "pay" });
+      // If the order was created but payment failed/cancelled, still show it.
+      if (err?.message === "Payment cancelled") { clear(); nav("/orders"); }
     } finally {
       setPlacing(false);
     }
@@ -68,8 +78,11 @@ export default function Cart() {
         <label htmlFor="addr">Delivery address</label>
         <textarea id="addr" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Flat, street, area, city" />
         <button className="btn block dark" style={{ marginTop: 16 }} onClick={placeOrder} disabled={placing}>
-          {placing ? "Placing…" : `Place order · ₹${total.toFixed(2)}`}
+          {placing ? "Processing…" : `Pay & place order · ₹${total.toFixed(2)}`}
         </button>
+        <p style={{ textAlign: "center", color: "var(--ink-soft)", fontSize: "0.8rem", marginTop: 10 }}>
+          Secure checkout via Razorpay
+        </p>
       </div>
     </main>
   );
