@@ -74,17 +74,24 @@ class GoogleLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={"username": _unique_username(email)},
-        )
-        if created:
-            user.set_unusable_password()
-            user.first_name = info.get("given_name", "")[:150]
-            user.last_name = info.get("family_name", "")[:150]
-            user.save()
+        try:
+            # Use filter().first() rather than get_or_create so a duplicate email
+            # (which would raise MultipleObjectsReturned) can't 500 the endpoint.
+            user = User.objects.filter(email=email).order_by("id").first()
+            if user is None:
+                user = User(username=_unique_username(email), email=email)
+                user.set_unusable_password()
+                user.first_name = info.get("given_name", "")[:150]
+                user.last_name = info.get("family_name", "")[:150]
+                user.save()
 
-        refresh = RefreshToken.for_user(user)
+            refresh = RefreshToken.for_user(user)
+        except Exception as e:  # surface the real reason instead of a bare 500
+            return Response(
+                {"detail": f"Login error: {type(e).__name__}: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
