@@ -56,17 +56,32 @@ async function main() {
   const call = (name, args) => rpc("tools/call", { name, arguments: args });
   console.log("1) login:", textOf(await call("login", { username: "demo_customer", password: "customerpass123" })));
 
-  const placed = textOf(await call("place_order", {
-    restaurant_id: 1,
-    delivery_address: "500 MCP Lane, AI City",
-    items: [{ menu_item: 1, quantity: 1 }, { menu_item: 2, quantity: 2 }],
-  }));
-  console.log("2) place_order:", placed);
-  const orderId = Number(placed.match(/Order ID: (\d+)/)?.[1]);
+  // Discover real IDs from the running backend (works against local OR prod,
+  // whose seeded IDs differ).
+  const restaurants = JSON.parse(textOf(await call("list_restaurants", {})));
+  const rid = restaurants[0].id;
+  const menu = JSON.parse(textOf(await call("get_restaurant_menu", { restaurant_id: rid })));
+  const items = menu.slice(0, 2).map((m) => ({ menu_item: m.id, quantity: 1 }));
+  console.log(`2) using restaurant #${rid} (${restaurants[0].name}), items ${items.map((i) => i.menu_item).join(",")}`);
 
-  console.log("3) pay_for_order:", textOf(await call("pay_for_order", { order_id: orderId })));
-  console.log("\n✅ MCP placed AND paid for an order end-to-end.");
+  const placed = textOf(await call("place_order", {
+    restaurant_id: rid,
+    delivery_address: "500 MCP Lane, AI City",
+    items,
+  }));
+  console.log("3) place_order:", placed);
+  const orderId = Number(placed.match(/Order ID: (\d+)/)?.[1]);
+  if (!orderId) { console.error("\n❌ place_order did not return an order id"); server.kill(); process.exit(1); }
+
+  const payResult = textOf(await call("pay_for_order", { order_id: orderId }));
+  console.log("4) pay_for_order:", payResult);
+  if (/PAID/.test(payResult)) {
+    console.log("\n✅ MCP placed AND paid for an order end-to-end.");
+    server.kill();
+    process.exit(0);
+  }
+  console.error("\n❌ payment did not complete");
   server.kill();
-  process.exit(0);
+  process.exit(1);
 }
 main().catch((e) => { console.error(e); server.kill(); process.exit(1); });
