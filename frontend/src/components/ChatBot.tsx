@@ -30,10 +30,11 @@ export default function ChatBot() {
   const logRef = useRef<HTMLDivElement>(null);
 
   // Reset the conversation when the user logs out (history is per-account).
+  // We keep the assistant available to logged-out visitors too — it just loses
+  // the personalized "you previously ordered…" context until they sign in.
   useEffect(() => {
     if (!isAuthed) {
       setMessages([GREETING]);
-      setOpen(false);
     }
   }, [isAuthed]);
 
@@ -41,8 +42,6 @@ export default function ChatBot() {
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending, open]);
-
-  if (!isAuthed) return null;
 
   async function send() {
     const question = input.trim();

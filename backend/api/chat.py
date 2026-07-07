@@ -117,7 +117,9 @@ class ChatView(APIView):
     The customer is taken from the JWT (request.user), not the body, matching
     how OrderViewSet scopes data to the authenticated user.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    # Open to everyone so the menu assistant works before sign-in. The scoped
+    # throttle (per-IP for anonymous users) keeps LLM usage in check.
+    permission_classes = [permissions.AllowAny]
     throttle_classes = [ChatThrottle]
 
     def post(self, request):
@@ -129,9 +131,15 @@ class ChatView(APIView):
             )
 
         # Menu (for grounding) + this user's recent orders (for personalization).
+        # Anonymous visitors simply get no order history in the prompt.
         items = list(MenuItem.objects.filter(is_available=True).select_related("restaurant"))
-        recent_orders = list(
-            Order.objects.filter(customer=request.user).prefetch_related("items__menu_item")[:5]
+        recent_orders = (
+            list(
+                Order.objects.filter(customer=request.user)
+                .prefetch_related("items__menu_item")[:5]
+            )
+            if request.user.is_authenticated
+            else []
         )
 
         prompt = (
