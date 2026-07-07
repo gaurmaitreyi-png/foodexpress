@@ -6,7 +6,7 @@ from .views import (
     RestaurantOrderViewSet, OwnerRestaurantViewSet,
 )
 from .serializers import LoginSerializer
-from .chat import ChatView
+from .chat import ChatView, AssistantOrderView
 from .auth_google import GoogleLoginView
 
 
@@ -26,5 +26,6 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/google/", GoogleLoginView.as_view(), name="google-login"),
     path("chat/", ChatView.as_view(), name="chat"),
+    path("assistant/order/", AssistantOrderView.as_view(), name="assistant-order"),
     path("", include(router.urls)),
 ]

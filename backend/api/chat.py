@@ -13,6 +13,10 @@ Kept in its own module so the LLM/HTTP plumbing stays out of the core CRUD
 views. Mirrors the project's class-based view style (see views.py) and reuses
 the same JWT auth + DRF Response conventions as the rest of the API.
 """
+import json
+import re
+from decimal import Decimal
+
 import requests
 from decouple import config
 from rest_framework import permissions, status
@@ -20,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import MenuItem, Order
+from .models import MenuItem, Order, Restaurant
 from .serializers import MenuItemSerializer
 
 # Ollama (local dev) — overridable via env, never hardcoded for deployment.
@@ -175,4 +179,117 @@ class ChatView(APIView):
             "suggested_dish_id": dish.id if dish else None,
             "suggested_dish": MenuItemSerializer(dish).data if dish else None,
             "success": True,
+        })
+
+
+def _strip_fences(text):
+    t = (text or "").strip()
+    t = re.sub(r"^```json\s*", "", t, flags=re.I)
+    t = re.sub(r"^```\s*", "", t)
+    t = re.sub(r"```$", "", t).strip()
+    return t
+
+
+def _menus_context():
+    """All available restaurants + menus, compact JSON for the LLM to choose from."""
+    out = []
+    for r in Restaurant.objects.filter(is_open=True).prefetch_related("menu_items"):
+        items = [
+            {"menu_item": m.id, "name": m.name, "price": str(m.price),
+             "veg": m.is_vegetarian, "category": m.category}
+            for m in r.menu_items.all() if m.is_available
+        ]
+        if items:
+            out.append({"restaurant_id": r.id, "restaurant": r.name,
+                        "cuisine": r.cuisine, "items": items})
+    return out
+
+
+class AssistantOrderView(APIView):
+    """POST /api/assistant/order/ — turn a natural-language request into a
+    concrete, priced order *proposal* (it does NOT place the order; the client
+    confirms, then places + pays via the normal /orders/ flow).
+
+    Body: { "request": str, "delivery_address"?: str }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ChatThrottle]
+
+    def post(self, request):
+        req = (request.data.get("request") or "").strip()
+        if not req:
+            return Response(
+                {"success": False, "error": "empty_request",
+                 "message": "Tell me what you'd like to order."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        menus = _menus_context()
+        if not menus:
+            return Response({"success": False, "error": "no_menu",
+                             "message": "No restaurants are open right now."})
+
+        prompt = (
+            "You assemble a food order for a FoodExpress customer.\n"
+            f'User request: "{req}"\n\n'
+            f"Available restaurants and menus (JSON):\n{json.dumps(menus)}\n\n"
+            "Pick ONE restaurant and 1-4 menu items from it that best match the "
+            "request. Respond with ONLY valid JSON, no markdown, exactly:\n"
+            '{"restaurant_id": <int>, "items": [{"menu_item": <int>, "quantity": <int>}], '
+            '"reasoning": "<one short sentence>"}'
+        )
+
+        try:
+            decision = json.loads(_strip_fences(_generate(prompt)))
+        except requests.exceptions.RequestException:
+            return Response({"success": False, "error": "llm_offline",
+                             "message": "Assistant is temporarily offline. Please try again."})
+        except (ValueError, TypeError):
+            return Response({"success": False, "error": "bad_plan",
+                             "message": "Sorry, I couldn't put an order together. Try rephrasing."})
+
+        rid = decision.get("restaurant_id")
+        items_in = decision.get("items") or []
+        by_id = {
+            m.id: m for m in MenuItem.objects.filter(
+                restaurant_id=rid, is_available=True,
+                id__in=[i.get("menu_item") for i in items_in if isinstance(i, dict)],
+            )
+        }
+
+        proposal_items, total = [], Decimal("0.00")
+        for i in items_in:
+            m = by_id.get(i.get("menu_item")) if isinstance(i, dict) else None
+            if not m:
+                continue
+            try:
+                qty = max(1, int(i.get("quantity", 1)))
+            except (TypeError, ValueError):
+                qty = 1
+            line = m.price * qty
+            total += line
+            proposal_items.append({
+                "menu_item": m.id, "name": m.name, "quantity": qty,
+                "unit_price": str(m.price), "line_total": str(line),
+            })
+
+        if not proposal_items:
+            return Response({"success": False, "error": "no_items",
+                             "message": "I couldn't match any available dishes. Try rephrasing."})
+
+        restaurant = Restaurant.objects.filter(id=rid).first()
+        address = (
+            (request.data.get("delivery_address") or "").strip()
+            or getattr(request.user, "address", "") or ""
+        )
+        return Response({
+            "success": True,
+            "proposal": {
+                "restaurant_id": rid,
+                "restaurant_name": restaurant.name if restaurant else "",
+                "items": proposal_items,
+                "total": str(total),
+                "reasoning": decision.get("reasoning", ""),
+                "delivery_address": address,
+            },
         })
