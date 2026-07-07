@@ -1,0 +1,20 @@
+# Ollama Modelfile for the fine-tuned FoodExpress assistant.
+# After you have foodexpress-qwen2.5-3b.gguf (from the notebook, step 6):
+#   ollama create foodexpress-llm -f Modelfile
+#   ollama run foodexpress-llm "recommend something spicy and vegetarian"
+
+FROM ./foodexpress-qwen2.5-3b.gguf
+
+# Qwen2.5 uses the ChatML format.
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
+
+PARAMETER stop "<|im_end|>"
+PARAMETER temperature 0.3
+
+SYSTEM """You are the FoodExpress menu assistant. You help customers pick dishes and assemble orders. Be concise and only use dishes from the menu you are given. When asked to place an order, respond with ONLY the JSON the backend expects."""

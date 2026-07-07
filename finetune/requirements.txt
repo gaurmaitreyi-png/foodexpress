@@ -1,0 +1,11 @@
+# FoodExpress fine-tuning pipeline.
+# Requires a CUDA GPU (Linux / Google Colab T4). bitsandbytes has no Windows wheel.
+# Pinned to a mutually-compatible set; bump together if you must.
+torch>=2.3
+transformers==4.46.3
+trl==0.12.2
+peft==0.14.0
+bitsandbytes==0.45.0
+accelerate==1.2.1
+datasets==3.2.0
+huggingface_hub>=0.26.0
