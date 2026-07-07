@@ -53,12 +53,17 @@ class GoogleLoginView(APIView):
             )
 
         try:
+            # clock_skew_in_seconds tolerates small server/Google clock drift,
+            # a common cause of "Token used too early/late" rejections.
             info = google_id_token.verify_oauth2_token(
-                credential, google_requests.Request(), GOOGLE_CLIENT_ID
+                credential, google_requests.Request(), GOOGLE_CLIENT_ID,
+                clock_skew_in_seconds=10,
             )
-        except ValueError:
+        except ValueError as e:
+            # Surface the specific reason (audience mismatch, expiry, clock skew)
+            # so failures are diagnosable instead of a generic message.
             return Response(
-                {"detail": "Invalid Google token."},
+                {"detail": f"Invalid Google token: {e}"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 

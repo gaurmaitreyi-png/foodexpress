@@ -29,8 +29,9 @@ export default function Login() {
       await loginWithGoogle(credential);
       toast.success("Signed in with Google");
       nav("/");
-    } catch {
-      toast.error("Google sign-in failed");
+    } catch (err: any) {
+      // Show the backend's specific reason so failures are self-explanatory.
+      toast.error(err?.response?.data?.detail || "Google sign-in failed");
     }
   }
 
